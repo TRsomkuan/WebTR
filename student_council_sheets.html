@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบสมาชิกผู้ปกครอง — Google Sheets Mode</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+  :root {
+    --primary: #1a56db; --primary-dark: #1341b0; --primary-light: #e8f0fe;
+    --secondary: #0e9f6e; --danger: #e02424; --warning: #ff8c00;
+    --bg: #f3f4f6; --card: #ffffff; --sidebar: #1e2235; --sidebar-hover: #2d3250;
+    --text: #111928; --text-muted: #6b7280; --border: #e5e7eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1); --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sarabun', sans-serif; background: var(--bg); color: var(--text); }
+
+  /* SETUP SCREEN */
+  #setup-screen {
+    position: fixed; inset: 0; background: var(--sidebar);
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .setup-box { background: var(--card); border-radius: 16px; padding: 40px; max-width: 480px; width: 100%; }
+  .setup-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .setup-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
+  .setup-steps { background: var(--bg); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+  .setup-step { font-size: 13px; padding: 5px 0; color: var(--text-muted); }
+  .setup-step strong { color: var(--text); }
+
+  /* LAYOUT */
+  #app { display: none; flex; min-height: 100vh; }
+  #app.ready { display: flex; }
+  #sidebar {
+    width: 220px; min-height: 100vh; background: var(--sidebar); color: #fff;
+    display: flex; flex-direction: column; position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;
+  }
+  .sidebar-header { padding: 20px 16px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-logo { font-size: 15px; font-weight: 700; }
+  .sidebar-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .sidebar-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .nav-section { padding: 12px 16px 4px; font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.8px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: rgba(255,255,255,0.75); cursor: pointer; border-left: 3px solid transparent; transition: all 0.15s; }
+  .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
+  .nav-item.active { background: var(--sidebar-hover); color: #fff; border-left-color: var(--primary); }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+  #main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .topbar-title { font-size: 16px; font-weight: 600; }
+  .content { padding: 24px; flex: 1; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* COMPONENTS */
+  .card { background: var(--card); border-radius: 10px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; }
+  .btn-primary { background: var(--primary); color: #fff; } .btn-primary:hover { background: var(--primary-dark); }
+  .btn-success { background: var(--secondary); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); } .btn-outline:hover { background: var(--bg); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-icon { padding: 6px; border-radius: 6px; background: transparent; border: 1px solid var(--border); cursor: pointer; font-size: 14px; }
+  .btn-icon.del { color: var(--danger); border-color: #fecaca; background: #fff5f5; }
+  input[type=text], input[type=tel], select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+  input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.1); }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+  .form-group { margin-bottom: 14px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--bg); padding: 10px 12px; text-align: left; font-weight: 600; font-size: 12px; color: var(--text-muted); border-bottom: 2px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-president { background: #fef3c7; color: #92400e; }
+  .badge-vp { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+  .room-card { background: var(--card); border: 2px solid var(--border); border-radius: 8px; padding: 10px 6px; text-align: center; cursor: pointer; transition: all 0.15s; }
+  .room-card:hover { border-color: var(--primary); }
+  .room-card.has-data { border-color: var(--secondary); background: #f0fdf4; }
+  .room-card .rn { font-size: 12px; font-weight: 700; }
+  .room-card .rc { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .vote-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .vote-card { background: var(--card); border: 2px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s; position: relative; }
+  .vote-card:hover { border-color: var(--primary); }
+  .vote-card.selected { border-color: var(--primary); background: var(--primary-light); }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--card); border-radius: 12px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+  .modal-header { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 15px; font-weight: 700; }
+  .modal-body { padding: 18px 22px; }
+  .modal-footer { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+  .loading { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; padding: 20px 0; }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 14px; }
+  .alert-info { background: var(--primary-light); color: var(--primary-dark); }
+  .alert-success { background: #d1fae5; color: #065f46; }
+  .alert-warning { background: #fef3c7; color: #92400e; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat-card { background: var(--card); border-radius: 10px; padding: 14px; box-shadow: var(--shadow); }
+  .stat-value { font-size: 26px; font-weight: 700; color: var(--primary); }
+  .stat-label { font-size: 12px; color: var(--text-muted); }
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+  .tab { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .winner-banner { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 2px solid #f59e0b; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px; }
+  .avatar-sm { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-light); display: inline-flex; align-items: center; justify-content: center; font-size: 16px; overflow: hidden; border: 2px solid var(--border); }
+  .avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
+  .checkbox-list { border: 1px solid var(--border); border-radius: 6px; max-height: 130px; overflow-y: auto; }
+  .checkbox-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .checkbox-item:last-child { border-bottom: none; }
+  .avatar-upload { display: flex; align-items: center; gap: 12px; }
+  .avatar-preview { width: 56px; height: 56px; border-radius: 50%; background: #e5e7eb; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 22px; overflow: hidden; }
+  .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .vote-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px; }
+  .vote-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.5s; }
+  .sync-btn { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: #fff; border: none; border-radius: 50px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(26,86,219,0.4); font-family: inherit; z-index: 200; }
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen">
+  <div class="setup-box">
+    <div style="font-size:32px;margin-bottom:12px;">🏫</div>
+    <div class="setup-title">ตั้งค่าการเชื่อมต่อ</div>
+    <div class="setup-sub">กรอก URL ของ Google Apps Script Web App เพื่อเริ่มใช้งาน</div>
+    <div class="setup-steps">
+      <div class="setup-step">1. เปิด Google Sheets ใหม่</div>
+      <div class="setup-step">2. ไปที่ <strong>Extensions → Apps Script</strong></div>
+      <div class="setup-step">3. วางโค้ด <strong>Code.gs</strong> ลงไป แล้วบันทึก</div>
+      <div class="setup-step">4. <strong>Deploy → New Deployment → Web App</strong></div>
+      <div class="setup-step">5. ตั้ง Execute as: <strong>Me</strong>, Access: <strong>Anyone</strong></div>
+      <div class="setup-step">6. Copy URL Web App มาวางด้านล่าง</div>
+    </div>
+    <div class="form-group">
+      <label>Google Apps Script Web App URL</label>
+      <input type="text" id="gas-url-input" placeholder="https://script.google.com/macros/s/...../exec" style="font-size:12px;">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-primary" style="flex:1" onclick="connectGAS()">🔗 เชื่อมต่อ</button>
+      <button class="btn btn-outline" onclick="useLocalMode()">💾 ใช้แบบ Local (ไม่ sync)</button>
+    </div>
+    <div id="connect-status" style="margin-top:12px;font-size:12px;color:var(--text-muted);"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏫 ระบบผู้ปกครอง</div>
+      <div class="sidebar-sub" id="sidebar-mode">Local Mode</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">เมนูหลัก</div>
+      <div class="nav-item active" onclick="showPage('rooms')" id="nav-rooms"><span class="icon">🏠</span><span>รายชื่อห้องเรียน</span></div>
+      <div class="nav-item" onclick="showPage('members')" id="nav-members"><span class="icon">👨‍👩‍👧</span><span>สมาชิก-ผู้ปกครอง</span></div>
+      <div class="nav-section">การโหวต</div>
+      <div class="nav-item" onclick="showPage('vote-class')" id="nav-vote-class"><span class="icon">🗳️</span><span>โหวตประธานระดับชั้น</span></div>
+      <div class="nav-item" onclick="showPage('vote-school')" id="nav-vote-school"><span class="icon">🏆</span><span>โหวตประธานโรงเรียน</span></div>
+      <div class="nav-section">รายงาน</div>
+      <div class="nav-item" onclick="showPage('summary')" id="nav-summary"><span class="icon">📊</span><span>สรุปผลทั้งหมด</span></div>
+      <div class="nav-item" onclick="syncFromServer()"><span class="icon">🔄</span><span>ดึงข้อมูลจาก Sheets</span></div>
+      <div class="nav-item" onclick="exportCSV()"><span class="icon">📥</span><span>Export CSV</span></div>
+    </nav>
+    <div style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08);">
+      <div style="font-size:11px;color:rgba(255,255,255,0.3);" id="last-sync-label">ยังไม่ได้ sync</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">รายชื่อห้องเรียน</div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <span style="font-size:12px;color:var(--text-muted)" id="topbar-info">—</span>
+        <button class="btn btn-outline btn-sm" onclick="syncFromServer()">🔄 Sync</button>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- PAGE: ROOMS -->
+      <div id="page-rooms" class="page active">
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">เลือกห้องเรียน</div>
+            <select id="filter-level" onchange="renderRooms()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+              <option value="">ทุกระดับ</option>
+              <option value="1">ม.1</option><option value="2">ม.2</option>
+              <option value="3">ม.3</option><option value="4">ม.4</option>
+              <option value="5">ม.5</option><option value="6">ม.6</option>
+            </select>
+          </div>
+          <div id="room-grid" class="room-grid"></div>
+        </div>
+      </div>
+
+      <!-- PAGE: MEMBERS -->
+      <div id="page-members" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title" id="members-title">สมาชิก</div>
+              <div style="font-size:12px;color:var(--text-muted)" id="members-sub"></div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline btn-sm" onclick="showPage('rooms')">← กลับ</button>
+              <button class="btn btn-outline btn-sm" onclick="openStudentsModal()">👨‍🎓 จัดการนักเรียน</button>
+              <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ เพิ่มสมาชิก</button>
+            </div>
+          </div>
+          <div id="members-loading" class="loading" style="display:none"><div class="spinner"></div>กำลังโหลด...</div>
+          <div class="table-wrap" id="members-table-wrap">
+            <table><thead><tr><th>รูป</th><th>ชื่อ-สกุล</th><th>อาชีพ</th><th>ตำแหน่ง</th><th>นักเรียน</th><th>เบอร์โทร</th><th>จัดการ</th></tr></thead>
+            <tbody id="members-tbody"></tbody></table>
+          </div>
+          <div id="members-empty" class="loading" style="display:none;justify-content:center">ยังไม่มีสมาชิก</div>
+        </div>
+      </div>
+
+      <!-- PAGE: VOTE CLASS -->
+      <div id="page-vote-class" class="page">
+        <div class="tabs" id="vote-class-tabs"></div>
+        <div id="vote-class-content"></div>
+      </div>
+
+      <!-- PAGE: VOTE SCHOOL -->
+      <div id="page-vote-school" class="page">
+        <div id="vote-school-content"></div>
+      </div>
+
+      <!-- PAGE: SUMMARY -->
+      <div id="page-summary" class="page">
+        <div id="summary-content"></div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL: Member -->
+<div class="modal-overlay" id="member-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">เพิ่มสมาชิก</div>
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>ชื่อ *</label><input type="text" id="f-fname" placeholder="ชื่อ"></div>
+        <div class="form-group"><label>นามสกุล *</label><input type="text" id="f-lname" placeholder="นามสกุล"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>อาชีพ</label><input type="text" id="f-job" placeholder="อาชีพ"></div>
+        <div class="form-group"><label>เบอร์โทร</label><input type="tel" id="f-phone" placeholder="0xxxxxxxxx"></div>
+      </div>
+      <div class="form-group">
+        <label>ตำแหน่ง *</label>
+        <select id="f-role">
+          <option value="ประธาน">ประธาน</option><option value="รองประธาน">รองประธาน</option>
+          <option value="เลขานุการ">เลขานุการ</option><option value="เหรัญญิก" selected>เหรัญญิก</option>
+          <option value="นายทะเบียน">นายทะเบียน</option><option value="ประชาสัมพันธ์">ประชาสัมพันธ์</option>
+          <option value="ปฏิคม">ปฏิคม</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>นักเรียนที่ดูแล</label>
+        <div class="checkbox-list" id="student-checklist"><div style="padding:10px;color:var(--text-muted);font-size:13px">ยังไม่มีนักเรียน</div></div>
+      </div>
+      <div class="form-group">
+        <label>รูปภาพ</label>
+        <div class="avatar-upload">
+          <div class="avatar-preview" id="avatar-preview">👤</div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('f-photo').click()">📷 เลือกรูป</button>
+          <input type="file" id="f-photo" accept="image/*" style="display:none" onchange="previewPhoto(event)">
+          <button type="button" class="btn btn-outline btn-sm" onclick="clearPhoto()">ลบ</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveMember()">✓ บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Students -->
+<div class="modal-overlay" id="students-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title" id="stu-modal-title">รายชื่อนักเรียน</div>
+      <button class="btn btn-outline btn-sm" onclick="closeStudentsModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info" style="font-size:12px">เพิ่มนักเรียนเพื่อเชื่อมโยงกับผู้ปกครอง</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="stu-name" placeholder="ชื่อ-นามสกุล" style="flex:1">
+        <input type="text" id="stu-no" placeholder="เลขที่" style="width:65px">
+        <button class="btn btn-primary btn-sm" onclick="addStudent()">+ เพิ่ม</button>
+      </div>
+      <div id="stu-list"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="closeStudentsModal()">เสร็จสิ้น</button></div>
+  </div>
+</div>
+
+<button class="sync-btn" onclick="syncFromServer()" title="ดึงข้อมูลจาก Google Sheets">🔄 Sync</button>
+
+<script>
+// ============================================================
+// CONFIG & STATE
+// ============================================================
+const LEVELS = [1,2,3,4,5,6];
+const ROOMS_PER_LEVEL = 14;
+const ROLES = ['ประธาน','รองประธาน','เลขานุการ','เหรัญญิก','นายทะเบียน','ประชาสัมพันธ์','ปฏิคม'];
+const ROLE_BADGE = {
+  'ประธาน':'badge-president','รองประธาน':'badge-vp','เลขานุการ':'','เหรัญญิก':'badge-green',
+  'นายทะเบียน':'','ประชาสัมพันธ์':'','ปฏิคม':''
+};
+
+let GAS_URL = localStorage.getItem('gas_url') || '';
+let USE_SHEETS = !!GAS_URL;
+let state = loadLocalState();
+let currentRoom = null;
+let editId = null;
+let photoData = null;
+let voteClassTab = 1;
+
+function loadLocalState() {
+  try { const s = localStorage.getItem('scs_gs'); if (s) return JSON.parse(s); } catch(e) {}
+  return { students:{}, members:{}, voteClass:{}, voteSchool:{levelWinners:{},votes:{},voted:[],winner:null} };
+}
+function saveLocalState() { localStorage.setItem('scs_gs', JSON.stringify(state)); }
+function roomKey(l,r) { return `${l}-${r}`; }
+function roomLabel(k) { const [l,r]=k.split('-'); return `ม.${l}/${r}`; }
+function allRooms() {
+  const r=[];
+  for(let l=1;l<=6;l++) for(let r2=1;r2<=ROOMS_PER_LEVEL;r2++) r.push(roomKey(l,r2));
+  return r;
+}
+
+// ============================================================
+// API LAYER
+// ============================================================
+
+async function gasGet(params) {
+  if (!GAS_URL) throw new Error('No GAS URL');
+  const url = GAS_URL + '?' + new URLSearchParams(params);
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+async function gasPost(body) {
+  if (!GAS_URL) throw new Error('No GAS URL');
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+// ============================================================
+// SETUP
+// ============================================================
+
+async function connectGAS() {
+  const url = document.getElementById('gas-url-input').value.trim();
+  if (!url) { alert('กรุณากรอก URL'); return; }
+  const status = document.getElementById('connect-status');
+  status.textContent = '🔄 กำลังทดสอบการเชื่อมต่อ...';
+  try {
+    const result = await fetch(url + '?action=getAllData');
+    const data = await result.json();
+    GAS_URL = url;
+    USE_SHEETS = true;
+    localStorage.setItem('gas_url', url);
+    // Import data from server
+    state.students = data.students || {};
+    state.members = data.members || {};
+    state.voteClass = data.voteClass || {};
+    state.voteSchool = data.voteSchool || {levelWinners:{},votes:{},voted:[],winner:null};
+    saveLocalState();
+    status.textContent = '✅ เชื่อมต่อสำเร็จ!';
+    document.getElementById('sidebar-mode').textContent = 'Google Sheets';
+    setTimeout(startApp, 800);
+  } catch(e) {
+    status.textContent = '❌ เชื่อมต่อไม่ได้: ' + e.message;
+  }
+}
+
+function useLocalMode() {
+  USE_SHEETS = false;
+  startApp();
+}
+
+function startApp() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').classList.add('ready');
+  if (GAS_URL) document.getElementById('sidebar-mode').textContent = 'Google Sheets';
+  renderRooms();
+  updateTopbar();
+}
+
+// Check if already configured
+if (GAS_URL) {
+  document.getElementById('gas-url-input').value = GAS_URL;
+  startApp();
+} else if (localStorage.getItem('scs_gs')) {
+  // Has local data, allow local mode auto-start
+  document.getElementById('setup-screen').style.display = 'flex';
+}
+
+// ============================================================
+// SYNC
+// ============================================================
+
+async function syncFromServer() {
+  if (!USE_SHEETS || !GAS_URL) { alert('ไม่ได้เชื่อมต่อ Google Sheets'); return; }
+  try {
+    showToast('🔄 กำลัง sync...');
+    const data = await gasGet({action:'getAllData'});
+    state.students = data.students || {};
+    state.members = data.members || {};
+    state.voteClass = data.voteClass || {};
+    state.voteSchool = data.voteSchool || {levelWinners:{},votes:{},voted:[],winner:null};
+    saveLocalState();
+    document.getElementById('last-sync-label').textContent = 'Sync: ' + new Date().toLocaleTimeString('th');
+    showToast('✅ Sync สำเร็จ!');
+    // Refresh current page
+    const activePage = document.querySelector('.page.active');
+    if (activePage) {
+      const pageId = activePage.id.replace('page-','');
+      showPage(pageId);
+    }
+  } catch(e) {
+    showToast('❌ Sync ผิดพลาด: ' + e.message);
+  }
+}
+
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;top:70px;right:20px;background:#1e2235;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;transition:opacity 0.3s;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  const nav = document.getElementById('nav-'+id);
+  if (nav) nav.classList.add('active');
+  const titles = {'rooms':'รายชื่อห้องเรียน','members':'สมาชิก-ผู้ปกครอง','vote-class':'โหวตประธานระดับชั้น','vote-school':'โหวตประธานระดับโรงเรียน','summary':'สรุปผลทั้งหมด'};
+  document.getElementById('topbar-title').textContent = titles[id]||'';
+  if (id==='rooms') renderRooms();
+  if (id==='members'&&currentRoom) renderMembers(currentRoom);
+  if (id==='vote-class') renderVoteClass();
+  if (id==='vote-school') renderVoteSchool();
+  if (id==='summary') renderSummary();
+}
+
+function updateTopbar() {
+  const filled = allRooms().filter(k=>(state.members[k]||[]).length>0).length;
+  document.getElementById('topbar-info').textContent = `${filled}/${allRooms().length} ห้อง`;
+}
+
+// ============================================================
+// ROOMS
+// ============================================================
+
+function renderRooms() {
+  const level = document.getElementById('filter-level').value;
+  const grid = document.getElementById('room-grid');
+  grid.innerHTML = '';
+  let total=0; allRooms().forEach(k=>{total+=(state.members[k]||[]).length});
+  const filled = allRooms().filter(k=>(state.members[k]||[]).length>0).length;
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${allRooms().length}</div><div class="stat-label">ห้องทั้งหมด</div></div>
+    <div class="stat-card"><div class="stat-value">${filled}</div><div class="stat-label">ห้องที่มีข้อมูล</div></div>
+    <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">สมาชิกทั้งหมด</div></div>
+    <div class="stat-card"><div class="stat-value">${Object.values(state.students).flat().length}</div><div class="stat-label">นักเรียนทั้งหมด</div></div>
+  `;
+  const levels = level ? [parseInt(level)] : LEVELS;
+  levels.forEach(l => {
+    const lbl = document.createElement('div');
+    lbl.style.cssText='grid-column:1/-1;font-size:12px;font-weight:700;color:var(--text-muted);padding:6px 0 4px;margin-top:6px;';
+    lbl.textContent = `ม.${l}`;
+    grid.appendChild(lbl);
+    for(let r=1;r<=ROOMS_PER_LEVEL;r++) {
+      const key=roomKey(l,r);
+      const mems=state.members[key]||[];
+      const stus=state.students[key]||[];
+      const el=document.createElement('div');
+      el.className='room-card'+(mems.length>0?' has-data':'');
+      el.innerHTML=`<div class="rn">ม.${l}/${r}</div><div class="rc">${mems.length} คน</div><div class="rc" style="color:#9ca3af">${stus.length} นร.</div>`;
+      el.onclick=()=>openRoom(key);
+      grid.appendChild(el);
+    }
+  });
+  updateTopbar();
+}
+
+function openRoom(key) {
+  currentRoom=key;
+  document.getElementById('members-title').textContent=`สมาชิก-ผู้ปกครอง${roomLabel(key)}`;
+  showPage('members');
+}
+
+// ============================================================
+// MEMBERS
+// ============================================================
+
+function renderMembers(key) {
+  const mems=state.members[key]||[];
+  const stus=state.students[key]||[];
+  const tbody=document.getElementById('members-tbody');
+  const empty=document.getElementById('members-empty');
+  document.getElementById('members-sub').textContent=`${mems.length} คน`;
+  if(mems.length===0){tbody.innerHTML='';empty.style.display='flex';return;}
+  empty.style.display='none';
+  tbody.innerHTML=mems.map(m=>{
+    const stuNames=(m.studentIds||[]).map(sid=>{const s=stus.find(x=>x.id===sid);return s?s.name:''}).filter(Boolean).join(', ');
+    return `<tr>
+      <td>${m.photo?`<div class="avatar-sm"><img src="${m.photo}"></div>`:'<div class="avatar-sm">👤</div>'}</td>
+      <td><strong>${m.fname} ${m.lname}</strong></td>
+      <td>${m.job||'-'}</td>
+      <td><span class="badge ${ROLE_BADGE[m.role]||''}" style="background:${roleBg(m.role)};color:${roleColor(m.role)}">${m.role}</span></td>
+      <td style="font-size:12px;max-width:160px">${stuNames||'-'}</td>
+      <td>${m.phone||'-'}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn-icon" onclick="openEditModal('${m.id}')" style="color:var(--warning);border-color:#fde68a">✏️</button>
+        <button class="btn-icon del" onclick="deleteMemberAction('${m.id}')">🗑️</button>
+      </td></tr>`;
+  }).join('');
+}
+
+function roleBg(r){const m={'ประธาน':'#fef3c7','รองประธาน':'#dbeafe','เลขานุการ':'#f3e8ff','เหรัญญิก':'#d1fae5','นายทะเบียน':'#fee2e2','ประชาสัมพันธ์':'#fce7f3','ปฏิคม':'#e0f2fe'};return m[r]||'#f3f4f6';}
+function roleColor(r){const m={'ประธาน':'#92400e','รองประธาน':'#1e40af','เลขานุการ':'#6b21a8','เหรัญญิก':'#065f46','นายทะเบียน':'#991b1b','ประชาสัมพันธ์':'#9d174d','ปฏิคม':'#075985'};return m[r]||'#374151';}
+
+// ============================================================
+// MODAL
+// ============================================================
+
+function openAddModal() {
+  editId=null;photoData=null;
+  document.getElementById('modal-title').textContent='เพิ่มสมาชิก-ผู้ปกครอง';
+  ['f-fname','f-lname','f-job','f-phone'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-role').value='เหรัญญิก';
+  document.getElementById('avatar-preview').innerHTML='👤';
+  buildChecklist([]);
+  document.getElementById('member-modal').classList.add('open');
+}
+
+function openEditModal(id) {
+  const m=(state.members[currentRoom]||[]).find(x=>x.id===id);
+  if(!m)return;
+  editId=id;photoData=m.photo||null;
+  document.getElementById('modal-title').textContent='แก้ไขสมาชิก';
+  document.getElementById('f-fname').value=m.fname;
+  document.getElementById('f-lname').value=m.lname;
+  document.getElementById('f-job').value=m.job||'';
+  document.getElementById('f-phone').value=m.phone||'';
+  document.getElementById('f-role').value=m.role;
+  document.getElementById('avatar-preview').innerHTML=m.photo?`<img src="${m.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`:'👤';
+  buildChecklist(m.studentIds||[]);
+  document.getElementById('member-modal').classList.add('open');
+}
+
+function buildChecklist(selected) {
+  const stus=state.students[currentRoom]||[];
+  const cl=document.getElementById('student-checklist');
+  if(stus.length===0){cl.innerHTML='<div style="padding:10px;color:var(--text-muted);font-size:13px">ยังไม่มีนักเรียน</div>';return;}
+  cl.innerHTML=stus.map(s=>`<div class="checkbox-item"><input type="checkbox" id="s-${s.id}" value="${s.id}" ${selected.includes(s.id)?'checked':''}><label for="s-${s.id}" style="margin:0;font-weight:400;color:var(--text);cursor:pointer">${s.name} (${s.no})</label></div>`).join('');
+}
+
+function closeModal(){document.getElementById('member-modal').classList.remove('open');}
+
+function previewPhoto(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{photoData=ev.target.result;document.getElementById('avatar-preview').innerHTML=`<img src="${photoData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`};
+  r.readAsDataURL(f);
+}
+function clearPhoto(){photoData=null;document.getElementById('avatar-preview').innerHTML='👤';document.getElementById('f-photo').value='';}
+
+async function saveMember() {
+  const fname=document.getElementById('f-fname').value.trim();
+  const lname=document.getElementById('f-lname').value.trim();
+  if(!fname||!lname){alert('กรุณากรอกชื่อและนามสกุล');return;}
+  const checked=Array.from(document.querySelectorAll('#student-checklist input:checked')).map(x=>x.value);
+  const member={id:editId||Date.now().toString(),fname,lname,job:document.getElementById('f-job').value.trim(),phone:document.getElementById('f-phone').value.trim(),role:document.getElementById('f-role').value,studentIds:checked,photo:photoData};
+  const btn=document.getElementById('save-btn');
+  btn.textContent='⏳ บันทึก...';btn.disabled=true;
+  try {
+    if(USE_SHEETS) {
+      if(editId) await gasPost({action:'updateMember',room:currentRoom,member});
+      else await gasPost({action:'addMember',room:currentRoom,member});
+    }
+    if(!state.members[currentRoom])state.members[currentRoom]=[];
+    if(editId){const i=state.members[currentRoom].findIndex(x=>x.id===editId);if(i>=0)state.members[currentRoom][i]=member;}
+    else state.members[currentRoom].push(member);
+    saveLocalState();
+    closeModal();renderMembers(currentRoom);
+  } catch(e){alert('ผิดพลาด: '+e.message);}
+  finally{btn.textContent='✓ บันทึก';btn.disabled=false;}
+}
+
+async function deleteMemberAction(id) {
+  if(!confirm('ยืนยันการลบ?'))return;
+  try {
+    if(USE_SHEETS) await gasPost({action:'deleteMember',room:currentRoom,id});
+    state.members[currentRoom]=(state.members[currentRoom]||[]).filter(x=>x.id!==id);
+    saveLocalState();renderMembers(currentRoom);
+  } catch(e){alert('ผิดพลาด: '+e.message);}
+}
+
+// ============================================================
+// STUDENTS MODAL
+// ============================================================
+
+function openStudentsModal(){
+  document.getElementById('stu-modal-title').textContent=`นักเรียน${roomLabel(currentRoom)}`;
+  renderStudentList();
+  document.getElementById('students-modal').classList.add('open');
+}
+function closeStudentsModal(){
+  document.getElementById('students-modal').classList.remove('open');
+  buildChecklist(editId?((state.members[currentRoom]||[]).find(x=>x.id===editId)||{}).studentIds||[]:[] );
+}
+function renderStudentList(){
+  const stus=state.students[currentRoom]||[];
+  const el=document.getElementById('stu-list');
+  if(stus.length===0){el.innerHTML='<div style="padding:16px;color:var(--text-muted);font-size:13px;text-align:center">ยังไม่มีนักเรียน</div>';return;}
+  el.innerHTML=`<table><thead><tr><th>เลขที่</th><th>ชื่อ-นามสกุล</th><th></th></tr></thead><tbody>${stus.map(s=>`<tr><td>${s.no}</td><td>${s.name}</td><td><button class="btn-icon del" onclick="deleteStudentAction('${s.id}')">🗑️</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function addStudent(){
+  const name=document.getElementById('stu-name').value.trim();
+  const no=document.getElementById('stu-no').value.trim();
+  if(!name)return;
+  let id=Date.now().toString();
+  if(USE_SHEETS){try{const r=await gasPost({action:'addStudent',room:currentRoom,name,no});if(r.id)id=r.id;}catch(e){alert('ผิดพลาด: '+e.message);return;}}
+  if(!state.students[currentRoom])state.students[currentRoom]=[];
+  state.students[currentRoom].push({id,name,no:no||'-'});
+  saveLocalState();
+  document.getElementById('stu-name').value='';document.getElementById('stu-no').value='';
+  renderStudentList();
+}
+async function deleteStudentAction(id){
+  if(!confirm('ลบนักเรียนนี้?'))return;
+  if(USE_SHEETS){try{await gasPost({action:'deleteStudent',room:currentRoom,id});}catch(e){alert('ผิดพลาด: '+e.message);return;}}
+  state.students[currentRoom]=(state.students[currentRoom]||[]).filter(x=>x.id!==id);
+  saveLocalState();renderStudentList();
+}
+
+// ============================================================
+// VOTE CLASS
+// ============================================================
+
+function renderVoteClass(){
+  const tabs=document.getElementById('vote-class-tabs');
+  tabs.innerHTML=LEVELS.map(l=>`<div class="tab ${l===voteClassTab?'active':''}" onclick="voteClassTab=${l};renderVoteClass()">ม.${l}</div>`).join('');
+  renderVoteClassLevel(voteClassTab);
+}
+
+function renderVoteClassLevel(level){
+  const content=document.getElementById('vote-class-content');
+  const vd=state.voteClass[level]||{votes:{},voted:null};
+  const presidents=[];
+  for(let r=1;r<=ROOMS_PER_LEVEL;r++){
+    const key=roomKey(level,r);
+    const p=(state.members[key]||[]).find(x=>x.role==='ประธาน');
+    if(p)presidents.push({...p,roomKey:key,roomLabel:`ม.${level}/${r}`});
+  }
+  const totalVotes=Object.values(vd.votes||{}).reduce((a,b)=>a+b,0);
+  const maxVote=Math.max(0,...Object.values(vd.votes||{}));
+  const hasVoted=!!vd.voted;
+  content.innerHTML=`<div class="card">
+    <div class="card-header">
+      <div class="card-title">โหวตประธานระดับชั้น ม.${level}</div>
+      ${hasVoted?`<span class="badge badge-green">✓ โหวตแล้ว: ${roomLabel(vd.voted)}</span>`:'<span style="font-size:12px;color:var(--text-muted)">เลือก 1 ห้อง</span>'}
+    </div>
+    ${presidents.length===0?'<div class="loading" style="justify-content:center">ยังไม่มีประธานห้องในระดับนี้</div>':''}
+    <div class="vote-grid">${presidents.map(p=>{
+      const votes=(vd.votes||{})[p.roomKey]||0;
+      const pct=totalVotes>0?Math.round(votes/totalVotes*100):0;
+      const isLeader=votes>0&&votes===maxVote;
+      return `<div class="vote-card ${hasVoted?'voted':''} ${vd.voted===p.roomKey?'selected':''}" onclick="${hasVoted?'':' voteForClass('+level+',\''+p.roomKey+'\')'}">
+        ${isLeader&&votes>0?'<span style="position:absolute;top:8px;right:8px;font-size:18px">👑</span>':''}
+        <div style="display:flex;align-items:center;gap:8px">
+          ${p.photo?`<img src="${p.photo}" style="width:38px;height:38px;border-radius:50%;object-fit:cover">`:'<div style="width:38px;height:38px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center">👤</div>'}
+          <div><div style="font-size:14px;font-weight:600">${p.fname} ${p.lname}</div><div style="font-size:12px;color:var(--text-muted)">${p.roomLabel}</div></div>
+        </div>
+        ${hasVoted?`<div style="margin-top:10px;display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text-muted)">${votes} คะแนน (${pct}%)</span><span style="font-size:18px;font-weight:700;color:var(--primary)">${votes}</span></div>
+        <div class="vote-bar"><div class="vote-bar-fill" style="width:${pct}%"></div></div>`:''}
+      </div>`;
+    }).join('')}</div>
+  </div>`;
+}
+
+async function voteForClass(level, roomkey){
+  if(!confirm(`ยืนยันโหวตให้ห้อง ${roomLabel(roomkey)}?`))return;
+  try {
+    if(USE_SHEETS) await gasPost({action:'voteClass',level,roomKey:roomkey});
+    if(!state.voteClass[level])state.voteClass[level]={votes:{},voted:null};
+    const vd=state.voteClass[level];
+    vd.votes[roomkey]=(vd.votes[roomkey]||0)+1;
+    vd.voted=roomkey;
+    // update level winner for school vote
+    const all=vd.votes;
+    const maxV=Math.max(...Object.values(all));
+    const winner=Object.entries(all).find(([k,v])=>v===maxV);
+    if(winner){
+      const p=(state.members[winner[0]]||[]).find(x=>x.role==='ประธาน');
+      state.voteSchool.levelWinners[level]={roomKey:winner[0],member:p};
+    }
+    saveLocalState();renderVoteClassLevel(level);
+  }catch(e){alert('ผิดพลาด: '+e.message);}
+}
+
+// ============================================================
+// VOTE SCHOOL
+// ============================================================
+
+function renderVoteSchool(){
+  const content=document.getElementById('vote-school-content');
+  const vs=state.voteSchool||{levelWinners:{},votes:{},voted:[],winner:null};
+  const winners=LEVELS.map(l=>({level:l,...(vs.levelWinners[l]||{})})).filter(x=>x.roomKey);
+  const totalVotes=Object.values(vs.votes||{}).reduce((a,b)=>a+b,0);
+  const maxVote=Math.max(0,...Object.values(vs.votes||{}));
+  content.innerHTML=`<div class="card">
+    <div class="card-header">
+      <div class="card-title">🏆 โหวตประธานระดับโรงเรียน</div>
+      <div style="font-size:12px;color:var(--text-muted)">โหวตแล้ว ${(vs.voted||[]).length}/${LEVELS.length} ระดับ</div>
+    </div>
+    ${winners.length===0?'<div class="loading" style="justify-content:center">รอผลโหวตระดับชั้นก่อน</div>':''}
+    <div class="vote-grid">${winners.map(w=>{
+      const p=w.member;
+      const votes=(vs.votes||{})[w.roomKey]||0;
+      const pct=totalVotes>0?Math.round(votes/totalVotes*100):0;
+      const isLeader=votes>0&&votes===maxVote;
+      const alreadyVoted=(vs.voted||[]).length>0;
+      return `<div class="vote-card ${alreadyVoted?'voted':''}" onclick="${alreadyVoted?'':'voteForSchool(\''+w.roomKey+'\','+w.level+')'}">
+        ${isLeader&&votes>0?'<span style="position:absolute;top:8px;right:8px;font-size:18px">👑</span>':''}
+        <div style="margin-bottom:6px"><span class="badge badge-vp">ม.${w.level}</span></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${p&&p.photo?`<img src="${p.photo}" style="width:42px;height:42px;border-radius:50%;object-fit:cover">`:'<div style="width:42px;height:42px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:20px">👤</div>'}
+          <div><div style="font-size:14px;font-weight:600">${p?p.fname+' '+p.lname:'ไม่ระบุ'}</div><div style="font-size:12px;color:var(--text-muted)">${roomLabel(w.roomKey)}</div></div>
+        </div>
+        ${alreadyVoted?`<div style="margin-top:10px;display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text-muted)">${votes} คะแนน (${pct}%)</span><span style="font-size:18px;font-weight:700;color:var(--primary)">${votes}</span></div>
+        <div class="vote-bar"><div class="vote-bar-fill" style="width:${pct}%"></div></div>`:''}
+      </div>`;
+    }).join('')}</div>
+    ${vs.winner?`<div class="alert alert-success" style="margin-top:16px">🏆 ผู้ชนะ: <strong>${roomLabel(vs.winner)}</strong></div>`:''}
+  </div>`;
+}
+
+async function voteForSchool(roomkey, level){
+  const vs=state.voteSchool;
+  if((vs.voted||[]).includes(parseInt(level))){alert(`ม.${level} ได้โหวตไปแล้ว`);return;}
+  const lvl=parseInt(prompt(`ระดับชั้น ม.ใด กำลังโหวต? (1-6)`));
+  if(!LEVELS.includes(lvl))return;
+  if((vs.voted||[]).includes(lvl)){alert(`ม.${lvl} ได้โหวตไปแล้ว`);return;}
+  if(!confirm(`ยืนยัน: ม.${lvl} โหวตให้ ${roomLabel(roomkey)}?`))return;
+  try {
+    if(USE_SHEETS) await gasPost({action:'voteSchool',voterLevel:lvl,targetRoom:roomkey});
+    if(!vs.votes)vs.votes={};
+    vs.votes[roomkey]=(vs.votes[roomkey]||0)+1;
+    if(!vs.voted)vs.voted=[];
+    vs.voted.push(lvl);
+    if(vs.voted.length===LEVELS.length){
+      const winner=Object.entries(vs.votes).sort((a,b)=>b[1]-a[1])[0];
+      vs.winner=winner[0];
+      setTimeout(()=>alert(`🏆 ผู้ชนะคือ ${roomLabel(winner[0])} ด้วย ${winner[1]} คะแนน!`),300);
+    }
+    saveLocalState();renderVoteSchool();
+  }catch(e){alert('ผิดพลาด: '+e.message);}
+}
+
+// ============================================================
+// SUMMARY
+// ============================================================
+
+function renderSummary(){
+  const vs=state.voteSchool||{};
+  let winnerHtml='';
+  if(vs.winner){
+    const p=(state.members[vs.winner]||[]).find(x=>x.role==='ประธาน');
+    winnerHtml=`<div class="winner-banner"><div style="font-size:36px">🏆</div><div style="font-size:20px;font-weight:700;margin:8px 0 4px">${p?p.fname+' '+p.lname:'ไม่ระบุ'}</div><div style="font-size:13px;color:#92400e">ประธานนักเรียนระดับโรงเรียน — ${roomLabel(vs.winner)}</div></div>`;
+  }
+  const levelRows=LEVELS.map(l=>{
+    const w=(vs.levelWinners||{})[l];
+    if(!w||!w.member)return`<tr><td>ม.${l}</td><td colspan="2" style="color:var(--text-muted)">ยังไม่มีผล</td></tr>`;
+    const p=w.member;
+    return`<tr><td>ม.${l}</td><td>${roomLabel(w.roomKey)}</td><td>${p.fname} ${p.lname}</td></tr>`;
+  }).join('');
+  const progRows=LEVELS.map(l=>{
+    let total=0,filled=0;
+    for(let r=1;r<=ROOMS_PER_LEVEL;r++){const c=(state.members[roomKey(l,r)]||[]).length;total+=c;if(c>0)filled++;}
+    const pct=Math.round(filled/ROOMS_PER_LEVEL*100);
+    return`<tr><td>ม.${l}</td><td>${filled}/${ROOMS_PER_LEVEL}</td><td>${total}</td><td><div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--secondary);border-radius:3px"></div></div></td><td>${pct}%</td></tr>`;
+  }).join('');
+  const allRows=[];
+  allRooms().forEach(key=>{
+    (state.members[key]||[]).forEach(m=>{
+      const stus=state.students[key]||[];
+      const stuNames=(m.studentIds||[]).map(sid=>{const s=stus.find(x=>x.id===sid);return s?s.name:''}).filter(Boolean).join(', ');
+      allRows.push(`<tr><td>${roomLabel(key)}</td><td>${m.fname} ${m.lname}</td><td>${m.role}</td><td>${m.job||'-'}</td><td>${m.phone||'-'}</td><td style="font-size:12px">${stuNames||'-'}</td></tr>`);
+    });
+  });
+  document.getElementById('summary-content').innerHTML=`${winnerHtml}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card"><div class="card-title" style="margin-bottom:12px">🏅 ผู้ชนะระดับชั้น</div><table><thead><tr><th>ระดับ</th><th>ห้อง</th><th>ชื่อ</th></tr></thead><tbody>${levelRows}</tbody></table></div>
+      <div class="card"><div class="card-title" style="margin-bottom:12px">📊 ความคืบหน้า</div><table><thead><tr><th>ระดับ</th><th>ห้อง</th><th>สมาชิก</th><th>คืบหน้า</th><th>%</th></tr></thead><tbody>${progRows}</tbody></table></div>
+    </div>
+    <div class="card"><div class="card-header"><div class="card-title">📋 รายชื่อทั้งหมด</div><button class="btn btn-success btn-sm" onclick="exportCSV()">⬇ Export CSV</button></div><table><thead><tr><th>ห้อง</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>อาชีพ</th><th>เบอร์โทร</th><th>นักเรียน</th></tr></thead><tbody>${allRows.join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">ยังไม่มีข้อมูล</td></tr>'}</tbody></table></div>`;
+}
+
+// ============================================================
+// EXPORT CSV
+// ============================================================
+
+function exportCSV(){
+  const rows=[['ห้อง','ชื่อ','นามสกุล','ตำแหน่ง','อาชีพ','เบอร์โทร','นักเรียนที่ดูแล']];
+  allRooms().forEach(key=>{
+    const stus=state.students[key]||[];
+    (state.members[key]||[]).forEach(m=>{
+      const stuNames=(m.studentIds||[]).map(sid=>{const s=stus.find(x=>x.id===sid);return s?s.name:''}).filter(Boolean).join('; ');
+      rows.push([roomLabel(key),m.fname,m.lname,m.role,m.job||'',m.phone||'',stuNames]);
+    });
+  });
+  const csv=rows.map(r=>r.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`members_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+}
+</script>
+</body>
+</html>
